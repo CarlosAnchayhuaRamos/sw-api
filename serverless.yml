@@ -1,0 +1,171 @@
+service: sw-api
+
+frameworkVersion: ">=2.24.0"
+
+plugins:
+  - serverless-dynamodb
+  - serverless-offline
+  - serverless-openapi-documentation
+
+custom:
+  dynamodb:
+    stages:
+      - dev
+    start:
+      port: 8000
+      inMemory: true
+      migrate: true
+    migration:
+      dir: offline/migrations
+  tableName: ${self:service}-${opt:stage, self:provider.stage}-new
+
+provider:
+  name: aws
+  stage: dev
+  region: us-east-1
+  runtime: nodejs16.x
+  environment:
+    DYNAMODB_TABLE: ${self:custom.tableName}
+  iam:
+    role:
+      statements:
+        - Effect: Allow
+          Action:
+            - dynamodb:Query
+            - dynamodb:Scan
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:UpdateItem
+            - dynamodb:DeleteItem
+          Resource: "arn:aws:dynamodb:${opt:region, self:provider.region}:*:table/${self:custom.tableName}"
+
+configValidationMode: error
+
+functions:
+  create:
+    handler: todos/create.create
+    events:
+      - http:
+          path: todos/{id}
+          method: post
+          cors: true
+    # documentation:
+    #   summary: "Crea un nuevo ítem en DynamoDB"
+    #   description: "Esta API permite crear un nuevo ítem en la tabla DynamoDB."
+    #   requestBody:
+    #     description: "Los datos del ítem que se va a crear."
+    #     required: true
+    #     content:
+    #       application/json:
+    #         schema:
+    #           type: object
+    #           properties:
+    #             nombre:
+    #               type: string
+    #               example: "Luke Skywalker"
+    #             altura:
+    #               type: string
+    #               example: "172"
+    #   responses:
+    #     '200':
+    #       description: "Ítem creado exitosamente"
+    #       content:
+    #         application/json:
+    #           schema:
+    #             type: object
+    #             properties:
+    #               id:
+    #                 type: string
+    #                 example: "1a2b3c"
+    #     '500':
+    #       description: "Error al crear el ítem"
+  list:
+    handler: todos/list.list
+    events:
+      - http:
+          path: todos
+          method: get
+          cors: true
+    # documentation:
+    #   summary: "Lista todos los ítems"
+    #   description: "Obtiene una lista de todos los ítems en la tabla DynamoDB."
+    #   responses:
+    #     '200':
+    #       description: "Lista de ítems obtenida exitosamente"
+    #       content:
+    #         application/json:
+    #           schema:
+    #             type: array
+    #             items:
+    #               type: object
+    #               properties:
+    #                 id:
+    #                   type: string
+    #                   example: "1a2b3c"
+    #                 nombre:
+    #                   type: string
+    #                   example: "Luke Skywalker"
+    #                 altura:
+    #                   type: string
+    #                   example: "172"
+
+  get:
+    handler: todos/get.get
+    events:
+      - http:
+          path: todos/{id}
+          method: get
+          cors: true
+    # documentation:
+    #   summary: "Obtiene un ítem por ID"
+    #   description: "Devuelve un ítem de la tabla DynamoDB basado en el ID proporcionado."
+    #   responses:
+    #     '200':
+    #       description: "Ítem obtenido exitosamente"
+    #       content:
+    #         application/json:
+    #           schema:
+    #             type: object
+    #             properties:
+    #               id:
+    #                 type: string
+    #                 example: "1a2b3c"
+    #               nombre:
+    #                 type: string
+    #                 example: "Luke Skywalker"
+    #               altura:
+    #                 type: string
+    #                 example: "172"
+    #     '404':
+    #       description: "Ítem no encontrado"
+
+  # delete:
+  #   handler: todos/delete.delete
+  #   events:
+  #     - http:
+  #         path: todos/{id}
+  #         method: delete
+  #         cors: true
+  #   documentation:
+  #     summary: "Elimina un ítem por ID"
+  #     description: "Elimina un ítem de la tabla DynamoDB basado en el ID proporcionado."
+  #     responses:
+  #       '204':
+  #         description: "Ítem eliminado exitosamente"
+  #       '404':
+  #         description: "Ítem no encontrado"
+
+resources:
+  Resources:
+    DynamoDbTable:
+      Type: 'AWS::DynamoDB::Table'
+      DeletionPolicy: Retain
+      Properties:
+        AttributeDefinitions:
+          - AttributeName: id
+            AttributeType: S
+        KeySchema:
+          - AttributeName: id
+            KeyType: HASH
+        BillingMode: PAY_PER_REQUEST
+        TableName: ${self:custom.tableName}
